@@ -2,51 +2,69 @@ import Wallet from "../models/Wallet.js";
 import Transaction from "../models/Transaction.js";
 import { verifyPayment } from "../services/paystack.service.js";
 import axios from "axios";
+import asyncHandler from "../utils/asyncHandler.js";
+import ApiError from "../utils/ApiError.js";
 
-export const fundWallet = async (req, res) => {
-  const payment = await verifyPayment(req.body.reference);
-  if (!payment.data.status) return res.status(400).json({ message: "Failed" });
+export const fundWallet = asyncHandler(async (req, res) => {
+  const { reference } = req.body;
+  if (!reference) {
+    throw new ApiError(400, "Payment reference is required");
+  }
+
+  const payment = await verifyPayment(reference);
+  if (!payment.data.status) {
+    throw new ApiError(400, "Payment verification failed");
+  }
 
   const wallet = await Wallet.findOne({ userId: req.user.id });
+  if (!wallet) {
+    throw new ApiError(404, "Wallet not found");
+  }
+
   wallet.balance += payment.data.amount / 100;
   await wallet.save();
 
-  res.json({ balance: wallet.balance });
-};
+  res.json({ success: true, balance: wallet.balance });
+});
 
-export const getWalletBalance = async (req, res) => {
+export const getWalletBalance = asyncHandler(async (req, res) => {
   const wallet = await Wallet.findOne({ userId: req.user.id });
-  res.json(wallet);
-};
+  if (!wallet) {
+    throw new ApiError(404, "Wallet not found");
+  }
 
-export const getUserTransactions = async (req, res) => {
+  res.json({ success: true, data: wallet });
+});
+
+export const getUserTransactions = asyncHandler(async (req, res) => {
   const transactions = await Transaction.find({ userId: req.user.id }).sort({
     createdAt: -1,
   });
-  res.json(transactions);
-};
 
-export const initFundWallet = async (req, res) => {
+  res.json({ success: true, data: transactions });
+});
+
+export const initFundWallet = asyncHandler(async (req, res) => {
   const { amount } = req.body;
-  const userId = req.user.id;
-
-  try {
-    const response = await axios.post(
-      "https://api.paystack.co/transaction/initialize",
-      {
-        email: req.user.email,
-        amount: amount * 100, // Paystack expects kobo
-        metadata: { userId },
-        callback_url: `${process.env.FRONTEND_URL}/dashboard`,
-      },
-      {
-        headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET}` },
-      },
-    );
-
-    res.json({ authorization_url: response.data.data.authorization_url });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to initiate payment" });
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
   }
-};
+
+  const response = await axios.post(
+    "https://api.paystack.co/transaction/initialize",
+    {
+      email: req.user.email,
+      amount: amount * 100,
+      metadata: { userId: req.user.id },
+      callback_url: `${process.env.FRONTEND_URL}/dashboard`,
+    },
+    {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET}` },
+    }
+  );
+
+  res.json({
+    success: true,
+    authorization_url: response.data.data.authorization_url,
+  });
+});

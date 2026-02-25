@@ -1,27 +1,48 @@
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import ServicePricing from "../models/ServicePricing.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import ApiError from "../utils/ApiError.js";
 
-export const users = async (req, res) => {
-  res.json(await User.find());
-};
+export const users = asyncHandler(async (req, res) => {
+  const allUsers = await User.find();
+  res.json({ success: true, data: allUsers });
+});
 
-export const transactions = async (req, res) => {
-  res.json(await Transaction.find().sort({ createdAt: -1 }));
-};
+export const transactions = asyncHandler(async (req, res) => {
+  const allTransactions = await Transaction.find().sort({ createdAt: -1 });
+  res.json({ success: true, data: allTransactions });
+});
 
-export const updatePricing = async (req, res) => {
-  const pricing = await ServicePricing.findByIdAndUpdate(
-    req.body.id,
-    req.body,
-    { new: true }
-  );
-  res.json(pricing);
-};
+export const updatePricing = asyncHandler(async (req, res) => {
+  const { id, ...updates } = req.body;
+  if (!id) {
+    throw new ApiError(400, "Pricing ID is required");
+  }
 
-export const refund = async (req, res) => {
-  const tx = await Transaction.findById(req.body.transactionId);
+  const pricing = await ServicePricing.findByIdAndUpdate(id, updates, {
+    new: true,
+  });
+  if (!pricing) {
+    throw new ApiError(404, "Pricing record not found");
+  }
+
+  res.json({ success: true, data: pricing });
+});
+
+export const refund = asyncHandler(async (req, res) => {
+  const { transactionId } = req.body;
+  if (!transactionId) {
+    throw new ApiError(400, "Transaction ID is required");
+  }
+
+  const tx = await Transaction.findById(transactionId);
+  if (!tx) {
+    throw new ApiError(404, "Transaction not found");
+  }
+
   tx.status = "REFUNDED";
   await tx.save();
-  res.json({ message: "Refund completed" });
-};
+
+  res.json({ success: true, message: "Refund completed" });
+});

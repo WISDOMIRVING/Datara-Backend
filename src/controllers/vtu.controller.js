@@ -7,17 +7,18 @@ import {
   subscribeCable,
   buyExamPin,
 } from "../services/vtu.service.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import ApiError from "../utils/ApiError.js";
 
-const processVTU = async ({
-  userId,
-  amount,
-  serviceType,
-  handler,
-  payload,
-}) => {
+const processVTU = async ({ userId, amount, serviceType, handler, payload }) => {
   const wallet = await Wallet.findOne({ userId });
+  if (!wallet) {
+    throw new ApiError(404, "Wallet not found");
+  }
 
-  if (wallet.balance < amount) throw new Error("Insufficient balance");
+  if (wallet.balance < amount) {
+    throw new ApiError(400, "Insufficient balance");
+  }
 
   wallet.balance -= amount;
   wallet.lockedBalance += amount;
@@ -40,6 +41,7 @@ const processVTU = async ({
 
     return response;
   } catch (err) {
+    // Rollback on failure
     wallet.balance += amount;
     wallet.lockedBalance -= amount;
     await wallet.save();
@@ -56,57 +58,82 @@ const processVTU = async ({
   }
 };
 
-export const airtime = async (req, res) => {
+export const airtime = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
+  }
+
   const response = await processVTU({
     userId: req.user.id,
-    amount: req.body.amount,
+    amount,
     serviceType: "AIRTIME",
     handler: buyAirtime,
     payload: req.body,
   });
-  res.json(response);
-};
+  res.json({ success: true, data: response });
+});
 
-export const data = async (req, res) => {
+export const data = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
+  }
+
   const response = await processVTU({
     userId: req.user.id,
-    amount: req.body.amount,
+    amount,
     serviceType: "DATA",
     handler: buyData,
     payload: req.body,
   });
-  res.json(response);
-};
+  res.json({ success: true, data: response });
+});
 
-export const electricity = async (req, res) => {
+export const electricity = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
+  }
+
   const response = await processVTU({
     userId: req.user.id,
-    amount: req.body.amount,
+    amount,
     serviceType: "ELECTRICITY",
     handler: payElectricity,
     payload: req.body,
   });
-  res.json(response);
-};
+  res.json({ success: true, data: response });
+});
 
-export const cable = async (req, res) => {
+export const cable = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
+  }
+
   const response = await processVTU({
     userId: req.user.id,
-    amount: req.body.amount,
+    amount,
     serviceType: "CABLE",
     handler: subscribeCable,
     payload: req.body,
   });
-  res.json(response);
-};
+  res.json({ success: true, data: response });
+});
 
-export const exam = async (req, res) => {
+export const exam = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    throw new ApiError(400, "A valid amount is required");
+  }
+
   const response = await processVTU({
     userId: req.user.id,
-    amount: req.body.amount,
+    amount,
     serviceType: "EXAM",
     handler: buyExamPin,
     payload: req.body,
   });
-  res.json(response);
-};
+  res.json({ success: true, data: response });
+});
