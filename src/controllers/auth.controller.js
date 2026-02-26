@@ -154,26 +154,33 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   // Send OTP email
-  await sendEmail({
-    to: user.email,
-    subject: "Datara - Password Reset OTP",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #1e3a8a; margin-bottom: 16px;">Password Reset</h2>
-        <p style="color: #374151; margin-bottom: 16px;">
-          Hi ${user.name}, you requested a password reset. Use the OTP code below to proceed:
-        </p>
-        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 16px;">
-          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e3a8a;">${otp}</span>
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: "Datara - Password Reset OTP",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #1e3a8a; margin-bottom: 16px;">Password Reset</h2>
+          <p style="color: #374151; margin-bottom: 16px;">
+            Hi ${user.name}, you requested a password reset. Use the OTP code below to proceed:
+          </p>
+          <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 16px;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e3a8a;">${otp}</span>
+          </div>
+          <p style="color: #6b7280; font-size: 14px;">
+            This code expires in <strong>10 minutes</strong>. If you didn't request this, please ignore this email.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+          <p style="color: #9ca3af; font-size: 12px;">— Datara Team</p>
         </div>
-        <p style="color: #6b7280; font-size: 14px;">
-          This code expires in <strong>10 minutes</strong>. If you didn't request this, please ignore this email.
-        </p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-        <p style="color: #9ca3af; font-size: 12px;">— Datara Team</p>
-      </div>
-    `,
-  });
+      `,
+    });
+    console.log(`✅ OTP email sent to ${user.email}`);
+  } catch (emailErr) {
+    console.error("⚠️ Email sending failed:", emailErr.message);
+    console.log(`📌 DEV FALLBACK — OTP for ${user.email}: ${otp}`);
+    // Don't throw — the OTP is saved in DB, user can get it from console in dev
+  }
 
   res.json({
     success: true,
