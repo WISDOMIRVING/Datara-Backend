@@ -11,7 +11,10 @@ const app = express();
 
 // ── Security ──────────────────────────────────────────────
 const allowedOrigins = [
-    process.env.FRONTEND_URL || "http://localhost:3000",
+    "http://localhost:3000",
+    ...(process.env.FRONTEND_URL
+        ? process.env.FRONTEND_URL.split(",").map((u) => u.trim())
+        : []),
 ];
 
 app.use(
