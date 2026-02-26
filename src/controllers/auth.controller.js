@@ -3,6 +3,7 @@ import Wallet from "../models/Wallet.js";
 import jwt from "jsonwebtoken";
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
+import sendEmail from "../utils/sendEmail.js";
 
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -127,4 +128,125 @@ export const changePassword = asyncHandler(async (req, res) => {
   await user.save();
 
   res.json({ success: true, message: "Password changed successfully" });
+});
+
+// ─── Forgot Password: send OTP ───────────────────────────────────────────────
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new ApiError(400, "Email is required");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    // Don't reveal whether the email exists
+    return res.json({
+      success: true,
+      message: "If that email is registered, you will receive an OTP shortly",
+    });
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  user.resetOtp = otp;
+  user.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  await user.save();
+
+  // Send OTP email
+  await sendEmail({
+    to: user.email,
+    subject: "Datara - Password Reset OTP",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="color: #1e3a8a; margin-bottom: 16px;">Password Reset</h2>
+        <p style="color: #374151; margin-bottom: 16px;">
+          Hi ${user.name}, you requested a password reset. Use the OTP code below to proceed:
+        </p>
+        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 16px;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e3a8a;">${otp}</span>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          This code expires in <strong>10 minutes</strong>. If you didn't request this, please ignore this email.
+        </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="color: #9ca3af; font-size: 12px;">— Datara Team</p>
+      </div>
+    `,
+  });
+
+  res.json({
+    success: true,
+    message: "If that email is registered, you will receive an OTP shortly",
+  });
+});
+
+// ─── Verify OTP ──────────────────────────────────────────────────────────────
+export const verifyOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    throw new ApiError(400, "Email and OTP are required");
+  }
+
+  const user = await User.findOne({ email }).select("+resetOtp +resetOtpExpiry");
+  if (!user || !user.resetOtp) {
+    throw new ApiError(400, "Invalid or expired OTP");
+  }
+
+  if (user.resetOtp !== otp) {
+    throw new ApiError(400, "Invalid OTP code");
+  }
+
+  if (user.resetOtpExpiry < new Date()) {
+    user.resetOtp = undefined;
+    user.resetOtpExpiry = undefined;
+    await user.save();
+    throw new ApiError(400, "OTP has expired. Please request a new one");
+  }
+
+  res.json({
+    success: true,
+    message: "OTP verified successfully",
+  });
+});
+
+// ─── Reset Password ──────────────────────────────────────────────────────────
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  if (!email || !otp || !newPassword) {
+    throw new ApiError(400, "Email, OTP, and new password are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new ApiError(400, "Password must be at least 6 characters");
+  }
+
+  const user = await User.findOne({ email }).select("+resetOtp +resetOtpExpiry +password");
+  if (!user || !user.resetOtp) {
+    throw new ApiError(400, "Invalid or expired OTP");
+  }
+
+  if (user.resetOtp !== otp) {
+    throw new ApiError(400, "Invalid OTP code");
+  }
+
+  if (user.resetOtpExpiry < new Date()) {
+    user.resetOtp = undefined;
+    user.resetOtpExpiry = undefined;
+    await user.save();
+    throw new ApiError(400, "OTP has expired. Please request a new one");
+  }
+
+  // Update password and clear OTP
+  user.password = newPassword;
+  user.resetOtp = undefined;
+  user.resetOtpExpiry = undefined;
+  await user.save();
+
+  res.json({
+    success: true,
+    message: "Password reset successfully. You can now log in.",
+  });
 });

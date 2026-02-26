@@ -44,6 +44,16 @@ const userSchema = new mongoose.Schema(
     referredBy: {
       type: String,
     },
+
+    resetOtp: {
+      type: String,
+      select: false,
+    },
+
+    resetOtpExpiry: {
+      type: Date,
+      select: false,
+    },
   },
   { timestamps: true }
 );
