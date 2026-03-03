@@ -39,11 +39,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
+      index: true,
     },
-
     referredBy: {
       type: String,
+      index: true,
     },
+
 
     resetOtp: {
       type: String,
@@ -54,9 +56,28 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
+
+// 🎁 Generate unique referral code before saving new user
+userSchema.pre("save", async function (next) {
+  if (this.isNew && !this.referralCode) {
+    let code;
+    let exists = true;
+    while (exists) {
+      code = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const user = await mongoose.models.User.findOne({ referralCode: code });
+      if (!user) exists = false;
+    }
+    this.referralCode = code;
+  }
+  next();
+});
 
 /**
  * 🔐 Hash password before saving

@@ -8,7 +8,8 @@ const transactionSchema = new mongoose.Schema({
   costPrice: Number,
   profit: Number,
   status: { type: String, default: "PENDING" },
-  reference: String,
+  reference: { type: String, index: true },
+
   apiResponse: Object
 }, { timestamps: true });
 

@@ -1,12 +1,13 @@
 import User from "../models/User.js";
 import Wallet from "../models/Wallet.js";
+import sendEmail from "../utils/sendEmail.js";
+import { registrationTemplate } from "../utils/emailTemplates.js";
 import jwt from "jsonwebtoken";
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
-import sendEmail from "../utils/sendEmail.js";
 
 export const register = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, referredBy } = req.body;
 
   if (!name || !email || !password) {
     throw new ApiError(400, "All fields are required");
@@ -17,7 +18,7 @@ export const register = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User already exists");
   }
 
-  const user = await User.create({ name, email, password, role: "USER" });
+  const user = await User.create({ name, email, password, role: "USER", referredBy });
 
   await Wallet.create({ userId: user._id, balance: 0 });
 
@@ -25,6 +26,13 @@ export const register = asyncHandler(async (req, res) => {
     success: true,
     message: "Registered successfully",
   });
+
+  // Notify User (Async)
+  sendEmail({
+    to: email,
+    subject: "Welcome to Datara!",
+    html: registrationTemplate(name)
+  }).catch(err => console.error("Registration Email Failed:", err));
 });
 
 export const login = asyncHandler(async (req, res) => {
@@ -45,15 +53,16 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role, email: user.email },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 
+
   res.json({
     success: true,
     token,
-    user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    user: { id: user._id, name: user.name, email: user.email, role: user.role, referralCode: user.referralCode },
   });
 });
 
@@ -72,6 +81,7 @@ export const getMe = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      referralCode: user.referralCode
     },
     wallet: wallet ? { balance: wallet.balance } : { balance: 0 },
   });

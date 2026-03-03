@@ -1,0 +1,12 @@
+
+> backend@1.0.0 test
+> cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --forceExit tests/auth.test.js
+
+● Validation Error:
+
+  Module C:\Users\HP\Desktop\workspace\Datara\datara\backend\tests\setup.js in the setupFilesAfterEnv option was not found.
+         <rootDir> is: C:\Users\HP\Desktop\workspace\Datara\datara\backend
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
