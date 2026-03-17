@@ -27,18 +27,13 @@ export const users = asyncHandler(async (req, res) => {
       },
       {
         $project: {
-          password: 0,
-          wallet: { $arrayElemAt: ["$wallet", 0] }
-        }
-      },
-      {
-        $project: {
+          _id: 1,
           name: 1,
           email: 1,
           role: 1,
           isLocked: 1,
           createdAt: 1,
-          balance: { $ifNull: ["$wallet.balance", 0] }
+          balance: { $ifNull: [{ $arrayElemAt: ["$wallet.balance", 0] }, 0] }
         }
       }
     ]),
