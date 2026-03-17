@@ -13,7 +13,35 @@ export const users = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [allUsers, total] = await Promise.all([
-    User.find().skip(skip).limit(limit).sort({ createdAt: -1 }),
+    User.aggregate([
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "wallets",
+          localField: "_id",
+          foreignField: "userId",
+          as: "wallet"
+        }
+      },
+      {
+        $project: {
+          password: 0,
+          wallet: { $arrayElemAt: ["$wallet", 0] }
+        }
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          role: 1,
+          isLocked: 1,
+          createdAt: 1,
+          balance: { $ifNull: ["$wallet.balance", 0] }
+        }
+      }
+    ]),
     User.countDocuments(),
   ]);
 
@@ -29,14 +57,17 @@ export const transactions = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
   const skip = (page - 1) * limit;
 
-  // Optional status filter (e.g. ?status=SUCCESS or ?status=FAILED)
   const filter = {};
   if (req.query.status) {
     filter.status = req.query.status.toUpperCase();
   }
 
   const [allTransactions, total] = await Promise.all([
-    Transaction.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 }),
+    Transaction.find(filter)
+      .populate("userId", "name email")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }),
     Transaction.countDocuments(filter),
   ]);
 
