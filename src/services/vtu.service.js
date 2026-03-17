@@ -3,7 +3,8 @@ import axios from "axios";
 const client = axios.create({
   baseURL: process.env.VTU_BASE_URL,
   headers: {
-    Authorization: `Bearer ${process.env.VTU_API_KEY}`,
+    "api-key": process.env.VTU_API_KEY,
+    "secret-key": process.env.VTU_SECRET_KEY,
     "Content-Type": "application/json",
   },
 });

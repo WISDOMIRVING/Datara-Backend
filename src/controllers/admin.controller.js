@@ -3,17 +3,48 @@ import Transaction from "../models/Transaction.js";
 import Wallet from "../models/Wallet.js";
 import WalletLog from "../models/WalletLog.js";
 import ServicePricing from "../models/ServicePricing.js";
+import mongoose from "mongoose";
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
 
 export const users = asyncHandler(async (req, res) => {
-  const allUsers = await User.find();
-  res.json({ success: true, data: allUsers });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const [allUsers, total] = await Promise.all([
+    User.find().skip(skip).limit(limit).sort({ createdAt: -1 }),
+    User.countDocuments(),
+  ]);
+
+  res.json({
+    success: true,
+    data: allUsers,
+    pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
 });
 
 export const transactions = asyncHandler(async (req, res) => {
-  const allTransactions = await Transaction.find().sort({ createdAt: -1 });
-  res.json({ success: true, data: allTransactions });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  // Optional status filter (e.g. ?status=SUCCESS or ?status=FAILED)
+  const filter = {};
+  if (req.query.status) {
+    filter.status = req.query.status.toUpperCase();
+  }
+
+  const [allTransactions, total] = await Promise.all([
+    Transaction.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 }),
+    Transaction.countDocuments(filter),
+  ]);
+
+  res.json({
+    success: true,
+    data: allTransactions,
+    pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
 });
 
 export const updatePricing = asyncHandler(async (req, res) => {
@@ -52,22 +83,34 @@ export const refund = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Target wallet not found");
   }
 
-  const balanceBefore = wallet.balance;
-  wallet.balance += tx.amount;
-  await wallet.save();
+  // Atomic refund: wallet credit + audit log + transaction status update
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  // Log refund
-  await WalletLog.create({
-    walletId: wallet._id,
-    amount: tx.amount,
-    type: "CREDIT",
-    reason: `Refund: ${tx.serviceType} (TXID: ${tx._id})`,
-    balanceBefore: balanceBefore,
-    balanceAfter: wallet.balance
-  });
+  try {
+    const balanceBefore = wallet.balance;
+    wallet.balance += tx.amount;
+    await wallet.save({ session });
 
-  tx.status = "REFUNDED";
-  await tx.save();
+    await WalletLog.create([{
+      walletId: wallet._id,
+      amount: tx.amount,
+      type: "CREDIT",
+      reason: `Refund: ${tx.serviceType} (TXID: ${tx._id})`,
+      balanceBefore: balanceBefore,
+      balanceAfter: wallet.balance
+    }], { session });
+
+    tx.status = "REFUNDED";
+    await tx.save({ session });
+
+    await session.commitTransaction();
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 
   res.json({ success: true, message: "Refund completed and wallet credited" });
 });

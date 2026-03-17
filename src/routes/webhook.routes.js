@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import { creditWallet } from "../services/wallet.service.js";
+import Transaction from "../models/Transaction.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
@@ -24,6 +25,17 @@ router.post(
 
       if (event === "charge.success") {
         logger.info(`Paystack Webhook: Received success for ${data.reference}`);
+
+        // Idempotency check — skip if this reference was already processed
+        const existingTx = await Transaction.findOne({
+          reference: data.reference,
+          status: "SUCCESS",
+        });
+
+        if (existingTx) {
+          logger.info(`Paystack Webhook: Reference ${data.reference} already processed, skipping`);
+          return res.sendStatus(200);
+        }
 
         await creditWallet({
           userId: data.metadata.userId,

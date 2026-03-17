@@ -8,17 +8,22 @@ import {
 } from "../controllers/vtu.controller.js";
 import auth from "../middleware/auth.js";
 import validate from "../middleware/validate.js";
-import { vtuPurchaseSchema } from "../validations/schemas.js";
+import {
+  airtimeSchema,
+  dataSchema,
+  electricitySchema,
+  cableSchema,
+  examSchema,
+} from "../validations/schemas.js";
 
 const router = express.Router();
 
 router.use(auth);
 
-router.post("/airtime", validate(vtuPurchaseSchema), airtime);
-router.post("/data", validate(vtuPurchaseSchema), data);
-router.post("/electricity", validate(vtuPurchaseSchema), electricity);
-router.post("/cable", validate(vtuPurchaseSchema), cable);
-router.post("/exam", validate(vtuPurchaseSchema), exam);
-
+router.post("/airtime", validate(airtimeSchema), airtime);
+router.post("/data", validate(dataSchema), data);
+router.post("/electricity", validate(electricitySchema), electricity);
+router.post("/cable", validate(cableSchema), cable);
+router.post("/exam", validate(examSchema), exam);
 
 export default router;
