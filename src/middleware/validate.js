@@ -9,7 +9,11 @@ const validate = (schema) => (req, res, next) => {
         });
         next();
     } catch (err) {
-        const message = err.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ");
+        // Safe error mapping for Zod errors
+        const message = err.errors
+            ? err.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")
+            : err.message || "Validation failed";
+
         next(new ApiError(400, message));
     }
 };
